@@ -79,7 +79,8 @@ remains). The DNN filters (`derain`, `sr`, `dnn_*`) now need a TensorFlow, OpenV
 ## Building
 
 The build needs Linux or macOS. On Windows, use WSL and keep the project on the Linux file system, not under
-`/mnt/<drive>`. No prebuilt binaries are published; you build the libraries yourself.
+`/mnt/<drive>`. A prebuilt universal LTS AAR (all ABIs, non-GPL libraries) is attached to each
+[release](https://github.com/vickyoo7/ffmpeg-kit-android/releases); to change the library set, build it yourself.
 
 1. Install the packages listed in [android/README.md](android/README.md#212-packages), the Android SDK, NDK r29
    and JDK 17.
