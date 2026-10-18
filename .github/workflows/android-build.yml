@@ -1,0 +1,63 @@
+name: android build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  NDK_VERSION: 29.0.14206865
+
+jobs:
+  build:
+    name: android ${{ matrix.abi }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [ arm-v7a, arm64-v8a, x86, x86-64 ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: install prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake libtool pkg-config curl git doxygen nasm cmake gcc gperf texinfo yasm bison autogen wget autopoint meson ninja-build ragel groff gtk-doc-tools libtool-bin python3 python-is-python3
+      - name: install android ndk
+        run: |
+          yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" "ndk;${NDK_VERSION}" > /dev/null
+          echo "ANDROID_SDK_ROOT=${ANDROID_HOME}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_VERSION=${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+      - name: build (lts, api 21)
+        run: |
+          disable=""
+          for a in arm-v7a arm-v7a-neon arm64-v8a x86 x86-64; do
+            [[ "$a" == "${{ matrix.abi }}" || ( "${{ matrix.abi }}" == "arm-v7a" && "$a" == "arm-v7a-neon" ) ]] || disable="$disable --disable-$a"
+          done
+          ./android.sh --lts --no-archive $disable \
+            --enable-android-media-codec --enable-android-zlib --enable-dav1d --enable-fontconfig \
+            --enable-freetype --enable-fribidi --enable-gmp --enable-gnutls --enable-kvazaar --enable-lame \
+            --enable-libass --enable-libiconv --enable-libilbc --enable-libtheora --enable-libvorbis \
+            --enable-libvpx --enable-libwebp --enable-libxml2 --enable-opencore-amr --enable-opus \
+            --enable-shine --enable-snappy --enable-soxr --enable-speex --enable-twolame \
+            --enable-vo-amrwbenc --enable-zimg
+      - name: check 16 KB page alignment
+        run: |
+          readelf="${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          for f in android/libs/*/*.so; do
+            if "$readelf" -lW "$f" | awk '$1=="LOAD" && $NF!="0x4000" && $NF!="0x10000" {bad=1} END{exit bad}'; then :; else echo "not 16 KB aligned: $f"; exit 1; fi
+          done
+      - name: print build log
+        if: ${{ always() }}
+        run: cat build.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-kit-android-${{ matrix.abi }}
+          path: android/libs

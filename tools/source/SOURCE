@@ -1,0 +1,12 @@
+The source code of "FFmpegKit", "FFmpeg" and external libraries enabled within
+"FFmpeg" for this release can be downloaded from
+https://github.com/vickyoo7/ffmpeg-kit-android (see the tag of the release).
+
+This project is a fork of https://github.com/arthenica/ffmpeg-kit. The build
+scripts download the source code of FFmpeg and of every enabled external library
+from the repositories listed in scripts/source.sh.
+
+If you cannot download the source code, open an issue at
+https://github.com/vickyoo7/ffmpeg-kit-android/issues with your request. Your
+request must be sent within three years of the date you received a build with
+the "GPL v3.0" license.

@@ -1,0 +1,128 @@
+MY_LOCAL_PATH := $(call my-dir)
+$(call import-add-path, $(MY_LOCAL_PATH))
+
+MY_ARMV7 := false
+MY_ARMV7_NEON := false
+ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
+    ifeq ("$(shell test -e $(MY_LOCAL_PATH)/../build/.armv7 && echo armv7)","armv7")
+        MY_ARMV7 := true
+    endif
+    ifeq ("$(shell test -e $(MY_LOCAL_PATH)/../build/.armv7neon && echo armv7neon)","armv7neon")
+        MY_ARMV7_NEON := true
+    endif
+endif
+
+ifeq ("$(shell test -e $(MY_LOCAL_PATH)/../build/.lts && echo lts)","lts")
+    MY_LTS_POSTFIX := -lts
+else
+    MY_LTS_POSTFIX :=
+endif
+
+ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
+    ifeq ($(MY_ARMV7_NEON), true)
+        MY_BUILD_DIR := android-$(TARGET_ARCH)-neon$(MY_LTS_POSTFIX)
+    else
+        MY_BUILD_DIR := android-$(TARGET_ARCH)$(MY_LTS_POSTFIX)
+    endif
+else
+    MY_BUILD_DIR := android-$(TARGET_ARCH)$(MY_LTS_POSTFIX)
+endif
+
+FFMPEG_INCLUDES := $(MY_LOCAL_PATH)/../../prebuilt/$(MY_BUILD_DIR)/ffmpeg/include
+
+MY_ARM_MODE := arm
+MY_ARM_NEON := false
+LOCAL_PATH := $(MY_LOCAL_PATH)/../ffmpeg-kit-android-lib/src/main/cpp
+
+# DEFINE ARCH FLAGS
+ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
+    MY_ARCH_FLAGS := ARM_V7A
+    MY_ARM_NEON := true
+endif
+ifeq ($(TARGET_ARCH_ABI), arm64-v8a)
+    MY_ARCH_FLAGS := ARM64_V8A
+    MY_ARM_NEON := true
+endif
+ifeq ($(TARGET_ARCH_ABI), x86)
+    MY_ARCH_FLAGS := X86
+    MY_ARM_NEON := true
+endif
+ifeq ($(TARGET_ARCH_ABI), x86_64)
+    MY_ARCH_FLAGS := X86_64
+    MY_ARM_NEON := true
+endif
+
+include $(CLEAR_VARS)
+LOCAL_ARM_MODE := $(MY_ARM_MODE)
+LOCAL_MODULE := ffmpegkit_abidetect
+LOCAL_SRC_FILES := ffmpegkit_abidetect.c
+LOCAL_CFLAGS := -Wall -Wextra -Werror -Wno-unused-parameter -DFFMPEG_KIT_${MY_ARCH_FLAGS}
+LOCAL_C_INCLUDES := $(FFMPEG_INCLUDES)
+LOCAL_LDLIBS := -llog -lz -landroid
+LOCAL_STATIC_LIBRARIES := cpu-features
+LOCAL_ARM_NEON := ${MY_ARM_NEON}
+include $(BUILD_SHARED_LIBRARY)
+
+$(call import-module, cpu-features)
+
+# fftools sources of the ffmpeg and ffprobe programs (FFmpeg fftools/Makefile), plus the wrapper
+MY_SRC_FILES := ffmpegkit.c ffprobekit.c ffmpegkit_exception.c ffmpeg_context.c \
+    fftools/cmdutils.c fftools/opt_common.c fftools/ffmpeg.c fftools/ffprobe.c \
+    fftools/ffmpeg_dec.c fftools/ffmpeg_demux.c fftools/ffmpeg_enc.c fftools/ffmpeg_filter.c \
+    fftools/ffmpeg_hw.c fftools/ffmpeg_mux.c fftools/ffmpeg_mux_init.c fftools/ffmpeg_opt.c \
+    fftools/ffmpeg_sched.c fftools/sync_queue.c fftools/thread_queue.c fftools/graph/graphprint.c \
+    fftools/resources/resman.c fftools/resources/graph_resources.c \
+    fftools/textformat/avtextformat.c fftools/textformat/tf_compact.c fftools/textformat/tf_default.c \
+    fftools/textformat/tf_flat.c fftools/textformat/tf_ini.c fftools/textformat/tf_json.c \
+    fftools/textformat/tf_mermaid.c fftools/textformat/tf_xml.c fftools/textformat/tw_avio.c \
+    fftools/textformat/tw_buffer.c fftools/textformat/tw_stdout.c compat/android/binder.c
+
+# fftools include "fftools/..." paths; NDK sysroots have no C23 stdbit.h, so FFmpeg's compat copy is used
+MY_C_INCLUDES := $(MY_LOCAL_PATH)/../ffmpeg-kit-android-lib/src/main/cpp $(FFMPEG_INCLUDES)/compat/stdbit
+
+ifeq ($(TARGET_PLATFORM),android-16)
+    MY_SRC_FILES += android_lts_support.c
+else ifeq ($(TARGET_PLATFORM),android-17)
+    MY_SRC_FILES += android_lts_support.c
+endif
+
+MY_CFLAGS := -Wall -Werror -Wno-unused-parameter -Wno-switch -Wno-sign-compare -Wno-single-bit-bitfield-constant-conversion
+MY_LDLIBS := -llog -lz -landroid -ldl
+
+MY_BUILD_GENERIC_FFMPEG_KIT := true
+
+ifeq ($(MY_ARMV7_NEON), true)
+    include $(CLEAR_VARS)
+    LOCAL_PATH := $(MY_LOCAL_PATH)/../ffmpeg-kit-android-lib/src/main/cpp
+    LOCAL_ARM_MODE := $(MY_ARM_MODE)
+    LOCAL_MODULE := ffmpegkit_armv7a_neon
+    LOCAL_SRC_FILES := $(MY_SRC_FILES)
+    LOCAL_C_INCLUDES := $(MY_C_INCLUDES)
+    LOCAL_CFLAGS := $(MY_CFLAGS)
+    LOCAL_LDLIBS := $(MY_LDLIBS)
+    LOCAL_SHARED_LIBRARIES := libavcodec_neon libavfilter_neon libswscale_neon libavformat_neon libavutil_neon libswresample_neon libavdevice_neon
+    LOCAL_ARM_NEON := true
+    include $(BUILD_SHARED_LIBRARY)
+
+    $(call import-module, ffmpeg/neon)
+
+    ifneq ($(MY_ARMV7), true)
+        MY_BUILD_GENERIC_FFMPEG_KIT := false
+    endif
+endif
+
+ifeq ($(MY_BUILD_GENERIC_FFMPEG_KIT), true)
+    include $(CLEAR_VARS)
+    LOCAL_PATH := $(MY_LOCAL_PATH)/../ffmpeg-kit-android-lib/src/main/cpp
+    LOCAL_ARM_MODE := $(MY_ARM_MODE)
+    LOCAL_MODULE := ffmpegkit
+    LOCAL_SRC_FILES := $(MY_SRC_FILES)
+    LOCAL_C_INCLUDES := $(MY_C_INCLUDES)
+    LOCAL_CFLAGS := $(MY_CFLAGS)
+    LOCAL_LDLIBS := $(MY_LDLIBS)
+    LOCAL_SHARED_LIBRARIES := libavfilter libavformat libavcodec libavutil libswresample libavdevice libswscale
+    LOCAL_ARM_NEON := ${MY_ARM_NEON}
+    include $(BUILD_SHARED_LIBRARY)
+
+    $(call import-module, ffmpeg)
+endif
